@@ -35,7 +35,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <div className="mx-auto w-full max-w-xl space-y-5 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-lg font-semibold">Image Optimizer UI</h1>
+        <h1 className="text-lg font-semibold">Pyx</h1>
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Image</span>
