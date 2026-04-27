@@ -14,6 +14,9 @@ export default function Home() {
   const [height, setHeight] = useState("");
   const [quality, setQuality] = useState("");
   const [format, setFormat] = useState("webp");
+  const [uploadError, setUploadError] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [fileInfo, setFileInfo] = useState<{ key: string } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -25,12 +28,64 @@ export default function Home() {
 
   const optimizedQuery = useMemo(() => {
     const params = new URLSearchParams();
-    if (width) params.set("w", width);
-    if (height) params.set("h", height);
-    if (quality) params.set("q", quality);
-    if (format) params.set("f", format);
+    if (width) params.set("width", width);
+    if (height) params.set("height", height);
+    if (quality) params.set("quality", quality);
+    if (format) params.set("format", format);
     return params.toString();
   }, [width, height, quality, format]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setUploadError("");
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    if (!file) {
+      setSelectedFile(null);
+      setPreviewUrl("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedFile(file);
+    setPreviewUrl(objectUrl);
+  };
+
+  const uploadToS3 = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error || "Upload failed");
+      }
+      const payload = await response.json();
+      setFileInfo(payload);
+      return payload;
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleOptimize = async () => {
+    if (!selectedFile) return;
+    const fileInfo = await uploadToS3(selectedFile);
+    console.log(fileInfo);
+  };
+
+const outputUrl = useMemo(() => {
+  if (!fileInfo) return "";
+  return `${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`;
+}, [fileInfo, optimizedQuery]);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
@@ -43,20 +98,7 @@ export default function Home() {
             type="file"
             accept="image/*"
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              if (previewUrl) {
-                URL.revokeObjectURL(previewUrl);
-              }
-              if (!file) {
-                setSelectedFile(null);
-                setPreviewUrl("");
-                return;
-              }
-              const objectUrl = URL.createObjectURL(file);
-              setSelectedFile(file);
-              setPreviewUrl(objectUrl);
-            }}
+            onChange={(e) => handleFileUpload(e)}
           />
         </label>
 
@@ -113,7 +155,15 @@ export default function Home() {
           <p className="mb-1 text-xs uppercase tracking-wide text-zinc-500">Optimized query</p>
           <code className="block break-all text-sm">{optimizedQuery ? `?${optimizedQuery}` : "-"}</code>
         </div>
+        <div>
+          <button
+            onClick={handleOptimize}
+            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
 
+            Optimize
+          </button>
+        </div>
+        <div className="text-sm text-zinc-500">Output URL: {outputUrl}</div>
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
           {previewUrl ? (
             <img src={previewUrl} alt={selectedFile?.name ?? "Selected image"} className="h-auto w-full" />
@@ -121,6 +171,9 @@ export default function Home() {
             <div className="grid min-h-56 place-items-center p-6 text-sm text-zinc-500">No image selected</div>
           )}
         </div>
+
+        {isUploading ? <p className="text-sm text-zinc-500">Uploading image...</p> : null}
+        {uploadError ? <p className="text-sm text-red-600 dark:text-red-400">{uploadError}</p> : null}
       </div>
     </main>
   );
