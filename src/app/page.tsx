@@ -17,7 +17,8 @@ export default function Home() {
   const [uploadError, setUploadError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [fileInfo, setFileInfo] = useState<{ key: string } | null>(null);
-
+  const [outputUrl, setOutputUrl] = useState("");
+  const [outputUrlLoading, setOutputUrlLoading] = useState(false);
   useEffect(() => {
     return () => {
       if (previewUrl) {
@@ -78,14 +79,12 @@ export default function Home() {
 
   const handleOptimize = async () => {
     if (!selectedFile) return;
+    setOutputUrlLoading(true);
     const fileInfo = await uploadToS3(selectedFile);
-    console.log(fileInfo);
+    await fetch(`${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`);
+    setOutputUrl(`${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`);
+    setOutputUrlLoading(false);
   };
-
-const outputUrl = useMemo(() => {
-  if (!fileInfo) return "";
-  return `${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`;
-}, [fileInfo, optimizedQuery]);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
@@ -157,10 +156,11 @@ const outputUrl = useMemo(() => {
         </div>
         <div>
           <button
+            disabled={outputUrlLoading}
             onClick={handleOptimize}
             className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800">
 
-            Optimize
+            {outputUrlLoading ? "Optimizing..." : "Optimize"}
           </button>
         </div>
         <div className="text-sm text-zinc-500">Output URL: {outputUrl}</div>
