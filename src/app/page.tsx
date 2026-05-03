@@ -16,7 +16,6 @@ export default function Home() {
   const [format, setFormat] = useState("webp");
   const [uploadError, setUploadError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [fileInfo, setFileInfo] = useState<{ key: string } | null>(null);
   const [outputUrl, setOutputUrl] = useState("");
   const [outputUrlLoading, setOutputUrlLoading] = useState(false);
   useEffect(() => {
@@ -68,7 +67,6 @@ export default function Home() {
         throw new Error(payload.error || "Upload failed");
       }
       const payload = await response.json();
-      setFileInfo(payload);
       return payload;
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed");
@@ -80,9 +78,23 @@ export default function Home() {
   const handleOptimize = async () => {
     if (!selectedFile) return;
     setOutputUrlLoading(true);
-    const fileInfo = await uploadToS3(selectedFile);
-    await fetch(`${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`);
-    setOutputUrl(`${process.env.NEXT_PUBLIC_PYX_ASSET_URL}/${fileInfo.key}?${optimizedQuery}`);
+    const uploaded = await uploadToS3(selectedFile);
+    if (!uploaded?.key) {
+      setOutputUrlLoading(false);
+      return;
+    }
+
+    const assetBase = process.env.NEXT_PUBLIC_PYX_ASSET_URL?.replace(/\/$/, "") ?? "";
+    const assetUrl = `${assetBase}/${uploaded.key}${optimizedQuery ? `?${optimizedQuery}` : ""}`;
+
+    // Cross-origin browser fetch() needs CORS from the asset host; same-origin API proxies the request.
+    await fetch("/api/prefetch-asset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: assetUrl }),
+    }).catch(() => {});
+
+    setOutputUrl(assetUrl);
     setOutputUrlLoading(false);
   };
 
