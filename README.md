@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pyx
 
-## Getting Started
+A lightweight web app to upload an image, tune optimization parameters, and generate an optimized output URL.
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## About
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Pyx provides a simple UI for image optimization workflows:
+- Upload an image from your local machine.
+- Configure resize and output settings (`width`, `height`, `quality`, `format`).
+- Generate an optimized asset URL after uploading the source image to S3.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app is built with Next.js App Router and includes server routes for upload and asset prefetching.
+## What does pyx do?
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Pyx provisions and runs an image transformation pipeline:
 
-## Learn More
+- Stores source images in an **original S3 bucket**
+- Transforms images in an **AWS Lambda** function (using `sharp`)
+- Stores transformed variants in a **transformed S3 bucket**
+- Serves through **CloudFront** with an origin group:
+  - Primary origin: transformed bucket (cache hit)
+  - Failover origin: Lambda URL/API (cache miss -> generate image)
 
-To learn more about Next.js, take a look at the following resources:
+The result is a lazy-generated image CDN: transformed images are created only when requested.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## High-Level Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Client requests an image URL (with optional query params like `width`, `height`, `format`) through CloudFront.
+2. CloudFront checks transformed S3 first.
+3. If transformed asset is missing (or origin failover status), CloudFront forwards request to the Lambda origin.
+4. Lambda:
+  - reads the original object from original S3
+  - applies resize/format transforms via `sharp`
+  - writes transformed output to transformed S3
+  - returns transformed bytes to client
+5. Next request for the same variant is served directly from transformed S3 via CloudFront.
